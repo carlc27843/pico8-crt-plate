@@ -227,7 +227,7 @@
 
 			// mouse (0.1.12d)
 
-			let canvas = document.getElementById("canvas");
+			var canvas = document.getElementById("canvas");
 			if (p8_touch_detected)
 			if (typeof(pico8_mouse) !== 'undefined')
 			if (canvas)
@@ -609,12 +609,14 @@
 				p8_buttons_hash = -33;
 
 			// crt effect - currently not working on mobile
-			if (!p8_touch_detected)
-				p8_crt_effect_init();
+			if (!p8_touch_detected) {
+				var canvas = document.getElementById("canvas");
+				p8_crt_effect_init(canvas);
+			}
 
 			// install drag&drop listeners
-			{
-				let canvas = document.getElementById("canvas");
+			/*{
+				var canvas = document.getElementById("canvas");
 				if (canvas)
 				{
 					canvas.addEventListener('dragenter', dragover, false);
@@ -623,7 +625,7 @@
 					canvas.addEventListener('drop', nop, false);
 					canvas.addEventListener('drop', p8_drop_file, false);
 				}
-			}
+			}*/
 		}
 		e.type = "application/javascript";
 		e.src = "##js_file##";
@@ -1296,20 +1298,21 @@ canvas{
 </script>
 
 <script type="text/javascript">
-	function p8_crt_effect_init() {
-		p8Canvas = document.getElementById("canvas");
-		canvas = p8Canvas.cloneNode(true);
-
-		p8Canvas.name = "p8Canvas";
-		canvas.name = "canvas";
-		canvas.class = "";
-		canvas.width = p8Canvas.clientWidth;
-		canvas.height = p8Canvas.clientHeight;
+	function p8_crt_effect_init(pico8_canvas) {
+		var canvas = document.createElement('canvas');
+		canvas.id = "crtcanvas";
+		canvas.className = "canvas";
+		canvas.style.position = "absolute";
+		canvas.style.top = 0;
+		canvas.style.left = 0;
+		canvas.width = pico8_canvas.clientWidth;
+		canvas.height = pico8_canvas.clientHeight;
 		gl = canvas.getContext('webgl');
 
 		if (gl) {
-			p8Canvas.parentNode.insertBefore(canvas,p8Canvas);
-			canvas.parentNode.removeChild(p8Canvas);
+			pico8_canvas.parentNode.insertBefore(canvas, pico8_canvas);
+			// keep pico8_canvas in DOM for event handling, but hide it via opacity
+			pico8_canvas.style.opacity = 0;
 
 			function unbind() {
 				for (var i = 0; i < arguments.length; ++i) {
@@ -1458,8 +1461,8 @@ canvas{
 			function draw() {
 				var time=(Date.now()-start_time)/1000;
 
-				var dw = p8Canvas.width * p8scale;
-				var dh = p8Canvas.height * p8scale;
+				var dw = pico8_canvas.width * p8scale;
+				var dh = pico8_canvas.height * p8scale;
 
 				if (lastdw != dw || lastdh != dh) {
 					for (var i = 0; i < texfbos.length; ++i) {
@@ -1473,10 +1476,10 @@ canvas{
 					}
 				}
 
-				/* blit pico8 screen to backbuffer; backbuffer = texImage2D(p8Canvas) */
+				/* blit pico8 screen to backbuffer; backbuffer = texImage2D(pico8_canvas) */
 				gl.activeTexture(gl.TEXTURE0);
 				gl.bindTexture(gl.TEXTURE_2D, tex_backbuffer);
-				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, p8Canvas);
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pico8_canvas);
 				unbind(gl.TEXTURE_2D);
 
 				gl.viewport(0, 0, dw, dh);
@@ -1519,8 +1522,8 @@ canvas{
 				/* create fully blurred version of backbuffer; blur_buf = blur(accum_buf) */
 				drawBlur(accum_buf.tex, blur_buf.fbo, blur_tmp, 1.0, dw, dh);
 
-				var cw = canvas.width = canvas.clientWidth;
-				var ch = canvas.height = canvas.clientHeight;
+				var cw = canvas.width = pico8_canvas.clientWidth;
+				var ch = canvas.height = pico8_canvas.clientHeight;
 				gl.viewport(0, 0, cw, ch);
 
 				/* apply crt shader; canvas = crt(accum_buf, blur_buf) */
