@@ -34,7 +34,7 @@
 
 	// When pico8_gpio is defined, reading and writing to gpio pins will read and write to these values
 	var pico8_gpio = new Array(128);
-	
+
 	// When pico8_audio_context context is defined, the html shell (this file) is responsible for creating and managing it.
 	// This makes satisfying browser requirements easier -- e.g. initialising audio from a short script in response to a user action.
 	// Otherwise PICO-8 will try to create and use its own context.
@@ -47,6 +47,7 @@
 			"p8b_pause1": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAOUlEQVRIx2NgGPbg/8cX/0F46FtAM4vobgHVLRowC6hm0YBbQLFFoxaM4FQ0dHPy0C1Nh26NNugBAAnizNiMfvbGAAAAAElFTkSuQmCC",
 "p8b_controls":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAQ0lEQVRIx2NgGAXEgP8fX/ynBaap4XBLhqcF1IyfYWQBrZLz0LEAlzqqxQFVLcAmT3MLqJqTaW7B4CqLaF4fjIIBBwBL/B2vqtPVIwAAAABJRU5ErkJggg==",
 "p8b_full":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAN0lEQVRIx2NgGPLg/8cX/2mJ6WcBrUJm4CwgOSgGrQVEB8WoBaMWDGMLhm5OHnql6dCt0YY8AAA9oZm+9Z9xQAAAAABJRU5ErkJggg==",
+"p8b_crt":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAItJREFUSIndlTESgCAMBMGxp+X/r6PlBbGS0XBoTEKBVwZm70gYCGF1RVSkWkgFS7njtYIW+mYWERglkQiyzuIVyjfGlOE+idkmSWHRPoLzpNq2dSewwMQGnlrLgGohfkluQ/bsPTSwCgWc3qJ1hjx6AdQzGAH5HFxbBP+D6c/106JF7cORJvkC/ZcONkpPhqwNuicAAAAASUVORK5CYII=",
 "p8b_pause0":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAKUlEQVRIx2NgGHbg/8cX/7FhctWNWjBqwagFoxaMWjBqwagF5Fkw5AAAPaGZvsIUtXUAAAAASUVORK5CYII=",
 "p8b_sound0":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAANklEQVRIx2NgGDHg/8cX/5Hx0LEA3cChYwEugwavBcRG4qgFoxYMZwuGfk4efqXp8KnRBj0AAMz7cLDnG4FeAAAAAElFTkSuQmCC",
 "p8b_sound1":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAPUlEQVRIx2NgGDHg/8cX/5Hx0LEA3cChYwEugwhZQLQDqG4BsZFIKMhGLRi1YChbMPRz8vArTYdPjTboAQCSVgpXUWQAMAAAAABJRU5ErkJggg==",
@@ -62,10 +63,9 @@
 
 	// added 0.2.1: work-around for iOS/Safari running from an iFrame (e.g. from itch.io page):
 	// touch events only register after adding dummy listeners on document.
-
-	document.addEventListener('touchstart', {});
-	document.addEventListener('touchmove', {});
-	document.addEventListener('touchend', {});
+ document.addEventListener('touchstart', function(){ }, {passive: false});
+	document.addEventListener('touchmove', function(){ }, {passive: false});
+	document.addEventListener('touchend', function(){ }, {passive: false});
 
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -81,18 +81,21 @@
 
 		if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0])
 		{
-			var filename = e.dataTransfer.files[0].name;
 			// read from file
 			reader = new FileReader();
-			reader.onload = function (event) {
-				p8_dropped_cart_name = filename;
+			reader.onload = function (event)
+			{
+				p8_dropped_cart_name = 'untitled.p8';
+				if (typeof e.dataTransfer.files[0].name !== 'undefined') p8_dropped_cart_name = e.dataTransfer.files[0].name;
+				if (typeof e.dataTransfer.files[0].fileName !== 'undefined') p8_dropped_cart_name = e.dataTransfer.files[0].fileName;
 				p8_dropped_cart = reader.result;
 				// data:image/png;base64
 				e.stopPropagation();
-				e.preventDefault(); 
+				e.preventDefault();
+				codo_command = 9; // read directly from p8_dropped_cart with libb64 decoder
 			};
 			reader.readAsDataURL(e.dataTransfer.files[0]);
-			codo_command = 9; // read directly from p8_dropped_cart with libb64 decoder
+			
 		}
 		else
 		{
@@ -118,6 +121,23 @@
 		evt.stopPropagation();
 		evt.preventDefault();
 		Module.pico8DragStop();
+	}
+
+	// download (pico-8 0.2.4d web exports can save a .wav file)
+	function download_browser_file(filename, contents)
+	{
+	  var element = document.createElement('a');
+	  if (filename.substr(filename.length - 7) == ".p8.png")
+	  	element.setAttribute('href', 'data:image/png;base64,' + encodeURIComponent(contents));
+	  else if (filename.substr(filename.length - 4) == ".wav")
+	  	element.setAttribute('href', 'data:audio/x-wav;base64,' + encodeURIComponent(contents));
+	  else
+	  	element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(contents));
+	  element.setAttribute('download', filename);
+	  element.style.display = 'none';
+	  document.body.appendChild(element);
+	  element.click();
+	  document.body.removeChild(element);
 	}
 	// --------------------------------------------------------------------------------------------------------------------------------
 
@@ -227,12 +247,13 @@
 
 			// mouse (0.1.12d)
 
-			var canvas = document.getElementById("canvas");
+			let canvas = document.getElementById("canvas");
 			if (p8_touch_detected)
 			if (typeof(pico8_mouse) !== 'undefined')
 			if (canvas)
 			{
 				var rect = canvas.getBoundingClientRect();
+				//console.log(rect.top, rect.right, rect.bottom, rect.left, x, y);
 
 				if (x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom)
 				{
@@ -608,21 +629,9 @@
 			if (typeof(p8_buttons_hash) !== 'undefined')
 				p8_buttons_hash = -33;
 
-			var canvas = document.getElementById("canvas");
-			p8_crt_effect_init(canvas);
-
-			// install drag&drop listeners
-			/*{
-				var canvas = document.getElementById("canvas");
-				if (canvas)
-				{
-					canvas.addEventListener('dragenter', dragover, false);
-					canvas.addEventListener('dragover', dragover, false);
-					canvas.addEventListener('dragleave', dragstop, false);
-					canvas.addEventListener('drop', nop, false);
-					canvas.addEventListener('drop', p8_drop_file, false);
-				}
-			}*/
+			// crt effect
+   var canvas = document.getElementById("canvas");
+   p8_crt_effect_init(canvas);
 		}
 		e.type = "application/javascript";
 		e.src = "##js_file##";
@@ -646,6 +655,18 @@
 			}
 		}
 
+		// install drag&drop listeners
+		{
+			let canvas = document.getElementById("canvas");
+			if (canvas)
+			{
+				canvas.addEventListener('dragenter', dragover, false);
+				canvas.addEventListener('dragover', dragover, false);
+				canvas.addEventListener('dragleave', dragstop, false);
+				canvas.addEventListener('drop', nop, false);
+				canvas.addEventListener('drop', p8_drop_file, false);
+			}
+		}
 	}
 
 	
@@ -874,15 +895,16 @@
 	// End of gamepad code
 
 
-	// key blocker. prevent cursor keys from scrolling page while playing cart.
-	// also don't act on M, R so that can mute / reset cart
+	// key blocker. prevent browser operations while playing cart so that PICO-8 can use those keys e.g. cursors to scroll, ctrl-r to reload
 	document.addEventListener('keydown',
 	function (event) {
 		event = event || window.event;
 		if (!p8_is_running) return;
+
 		if (pico8_state.has_focus == 1)
-			if ([32, 37, 38, 39, 40, 77, 82, 80, 9].indexOf(event.keyCode) > -1)       // block cursors, M R P, tab
+			if ([32, 37, 38, 39, 40, 77, 82, 80, 9].indexOf(event.keyCode) > -1)       // block only cursors, M R P, tab
 				if (event.preventDefault) event.preventDefault();
+
 	},{passive: false});
 
 	// when using codo_textarea to determine focus, need to explicitly hand focus back when clicking a p8_menu_button
@@ -925,9 +947,29 @@
 		}
 	}
 
+ function p8_toggle_crt() {
+  var canvas = document.getElementById("canvas");
+  var crtcanvas = document.getElementById("crtcanvas");
+  if (crtcanvas == null) {
+   p8_crt_effect_init(canvas);
+  }
+  else {
+   canvas.parentNode.removeChild(crtcanvas);
+   canvas.style.opacity = 1;
+  }
+ }
+
 </script>
 
 <STYLE TYPE="text/css">
+.disable-select {
+  user-select: none; /* supported by Chrome and Opera */
+ -webkit-user-select: none; /* Safari */
+ -khtml-user-select: none; /* Konqueror HTML */
+ -moz-user-select: none; /* Firefox */
+ -ms-user-select: none; /* Internet Explorer/Edge */
+}
+
 <!--
 .p8_menu_button{
 	opacity:0.3;
@@ -962,7 +1004,7 @@ canvas{
 
 .p8_start_button{
 	cursor:pointer;
-	background:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAIAAABMXPacAAAARUlEQVR4Ae3dgQAAAACAoP2pFymSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACABsCAAAGB4kPcAAAAEHRFWHRMb2RlUE5HADIwMTEwMjIx41m2wQAAAABJRU5ErkJggg==");
+	background:url("##label_file##");
 	-repeat center;
 	-webkit-background-size:cover; -moz-background-size:cover; -o-background-size:cover; background-size:cover;
 }
@@ -994,7 +1036,7 @@ canvas{
 <!-- Add any content above the cart here -->
 
 
-<div id="p8_frame_0" style="max-width:800px; max-height:800px; margin:auto;"> <!-- double function: limit size, and display only this div for touch devices -->
+<div id="p8_frame_0" class="disable-select" style="max-width:800px; max-height:800px; margin:auto;"> <!-- double function: limit size, and display only this div for touch devices -->
 <div id="p8_frame" style="display:flex; width:100%; max-width:95vw; height:100vw; max-height:95vh; margin:auto;">
 
 	<div id="p8_menu_buttons_touch" style="position:absolute; width:100%; z-index:10; left:0px;">
@@ -1027,10 +1069,11 @@ canvas{
 				<canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault();" >
 				</canvas>
 				<div class=p8_menu_buttons id="p8_menu_buttons" style="margin-left:10px;">
-					<div class="p8_menu_button" style="position:absolute; bottom:125px" id="p8b_controls" onClick="p8_give_focus(); Module.pico8ToggleControlMenu();"></div>					
-					<div class="p8_menu_button" style="position:absolute; bottom:90px" id="p8b_pause" onClick="p8_give_focus(); Module.pico8TogglePaused(); p8_update_layout_hash = -22;"></div>
-					<div class="p8_menu_button" style="position:absolute; bottom:55px" id="p8b_sound" onClick="p8_give_focus(); p8_create_audio_context(); Module.pico8ToggleSound();"></div>
-					<div class="p8_menu_button" style="position:absolute; bottom:20px" id="p8b_full" onClick="p8_give_focus(); p8_request_fullscreen();"></div>
+					<div class="p8_menu_button" style="position:absolute; bottom:160px" id="p8b_controls" onClick="p8_give_focus(); Module.pico8ToggleControlMenu();"></div>					
+					<div class="p8_menu_button" style="position:absolute; bottom:125px" id="p8b_pause" onClick="p8_give_focus(); Module.pico8TogglePaused(); p8_update_layout_hash = -22;"></div>
+					<div class="p8_menu_button" style="position:absolute; bottom:90px" id="p8b_sound" onClick="p8_give_focus(); p8_create_audio_context(); Module.pico8ToggleSound();"></div>
+					<div class="p8_menu_button" style="position:absolute; bottom:55px" id="p8b_full" onClick="p8_give_focus(); p8_request_fullscreen();"></div>
+					<div class="p8_menu_button" style="position:absolute; bottom:20px" id="p8b_crt" onClick="p8_give_focus(); p8_toggle_crt();"></div>
 				</div>
 			</div>
 
@@ -1048,6 +1091,8 @@ canvas{
 
 			<!-- used for clipboard access & keyboard input; displayed and used by PICO-8 only once needed. can be safely removed if clipboard / key presses not needed. -->
 			<!-- (needs to be inside p8_playarea so that it still works under Chrome when fullscreened) -->
+			<!-- 0.2.5: added "display:none"; pico8.js shows on demand to avoid mac osx accent character selector // https://www.lexaloffle.com/bbs/?tid=47743 -->
+
 			<textarea id="codo_textarea" class="emscripten" style="display:none; position:absolute; left:-9999px; height:0px; overflow:hidden"></textarea>
 
 		</div> <!--p8_playarea -->
@@ -1065,6 +1110,7 @@ canvas{
 	var canvas = document.getElementById("canvas");
 	Module = {};
 	Module.canvas = canvas;
+	//Module.arguments = ["-displays_x","2","-displays_y","2","-mix_buffer_size","2048"];
 
 	// from @ultrabrite's shell: test if an AudioContext can be created outside of an event callback.
 	// If it can't be created, then require pressing the start button to run the cartridge
@@ -1100,8 +1146,6 @@ canvas{
 
 </div> <!-- body_0 -->
 </body></html>
-
-<!-- 8< -- ## GL SHADER STUFF STARTS HERE ## -- -->
 
 <!-- Based on PICO-8 CRT framework by ultrabrite (twitter: @SpaceTrucker2k0) -->
 <!-- https://www.lexaloffle.com/bbs/?tid=33488 -->
@@ -1301,24 +1345,24 @@ canvas{
 </script>
 
 <script type="text/javascript">
-	function p8_crt_effect_init(pico8_canvas) {
-		var canvas = document.createElement('canvas');
-		canvas.id = "crtcanvas";
-		canvas.className = "canvas";
-		canvas.style.position = "absolute";
-		canvas.style.top = 0;
-		canvas.style.left = 0;
-		canvas.width = pico8_canvas.clientWidth;
-		canvas.height = pico8_canvas.clientHeight;
-		var gl = canvas.getContext('webgl');
+	function p8_crt_effect_init(canvas) {
+		var crtcanvas = document.createElement('canvas');
+		crtcanvas.id = "crtcanvas";
+		crtcanvas.className = "crtcanvas";
+		crtcanvas.style.position = "absolute";
+		crtcanvas.style.top = 0;
+		crtcanvas.style.left = 0;
+		crtcanvas.width = canvas.clientWidth;
+		crtcanvas.height = canvas.clientHeight;
+		var gl = crtcanvas.getContext('webgl');
 		if (!gl)
 			return;
 
-		var pico8_ctx = pico8_canvas.getContext('2d');
+		var pico8_ctx = canvas.getContext('2d');
 
-		pico8_canvas.parentNode.insertBefore(canvas, pico8_canvas);
-		/* keep pico8_canvas in DOM for event handling, but hide it via opacity */
-		pico8_canvas.style.opacity = 0;
+		canvas.parentNode.insertBefore(crtcanvas, canvas);
+		/* keep canvas in DOM for event handling, but hide it via opacity */
+		canvas.style.opacity = 0;
 
 		function unbind() {
 			for (var i = 0; i < arguments.length; ++i) {
@@ -1474,17 +1518,17 @@ canvas{
 		function draw(now) {
 			var time = now * 0.001;
 
-			/* hack fix for Safari: texImage2D fails to copy pico8_canvas to tex_backbuffer */
+			/* hack fix for Safari: texImage2D fails to copy canvas to tex_backbuffer */
 			pico8_ctx.resetTransform();
 			pico8_ctx.clearRect(-1, -1, 1, 1);
 
 			var p8scale = Math.ceil(Math.max(
-				pico8_canvas.clientWidth / pico8_canvas.width,
-				pico8_canvas.clientHeight / pico8_canvas.height));
+				canvas.clientWidth / canvas.width,
+				canvas.clientHeight / canvas.height));
 			p8scale = Math.max(1, Math.min(4, p8scale));
 
-			var dw = pico8_canvas.width * p8scale;
-			var dh = pico8_canvas.height * p8scale;
+			var dw = canvas.width * p8scale;
+			var dh = canvas.height * p8scale;
 
 			if (lastdw != dw || lastdh != dh) {
 				for (var i = 0; i < texfbos.length; ++i) {
@@ -1499,10 +1543,10 @@ canvas{
 				}
 			}
 
-			/* blit pico8 screen to backbuffer; backbuffer = texImage2D(pico8_canvas) */
+			/* blit pico8 screen to backbuffer; backbuffer = texImage2D(canvas) */
 			gl.activeTexture(gl.TEXTURE0);
 			gl.bindTexture(gl.TEXTURE_2D, tex_backbuffer);
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pico8_canvas);
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
 			unbind(gl.TEXTURE_2D);
 
 			gl.viewport(0, 0, dw, dh);
@@ -1547,14 +1591,14 @@ canvas{
 			/* create fully blurred version of backbuffer; blur_buf = blur(accum_buf) */
 			drawBlur(accum_buf.tex, blur_buf.fbo, blur_tmp, 1.0, dw, dh);
 
-			/* ensure crt canvas overlays pico8_canvas */
-			canvas.style.top = pico8_canvas.offsetTop;
-			canvas.style.left = pico8_canvas.offsetLeft;
-			var cw = canvas.width = pico8_canvas.clientWidth;
-			var ch = canvas.height = pico8_canvas.clientHeight;
+			/* ensure crt crtcanvas overlays canvas */
+			crtcanvas.style.top = canvas.offsetTop;
+			crtcanvas.style.left = canvas.offsetLeft;
+			var cw = crtcanvas.width = canvas.clientWidth;
+			var ch = crtcanvas.height = canvas.clientHeight;
 			gl.viewport(0, 0, cw, ch);
 
-			/* apply crt shader; canvas = crt(accum_buf, blur_buf) */
+			/* apply crt shader; crtcanvas = crt(accum_buf, blur_buf) */
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			gl.useProgram(crt_program);
 			bindVertexBuffer(loc_crt_pos);
@@ -1578,4 +1622,3 @@ canvas{
 		requestAnimationFrame(draw);
 	}
 </script>
-<!-- 8< -- ## GL SHADER STUFF ENDS HERE ## -- -->
